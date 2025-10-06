@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\Assert as PHPUnit;
 use Monolog\Handler\TestHandler;
 use Monolog\Logger;
+use PDOException;
 use Ssddanbrown\AssertHtml\TestsHtml;
 use Tests\Helpers\EntityProvider;
 use Tests\Helpers\FileProvider;
@@ -42,11 +43,48 @@ abstract class TestCase extends BaseTestCase
         $this->permissions = new PermissionsProvider($this->users);
         $this->files = new FileProvider();
 
-        parent::setUp();
+        try {
+            parent::setUp();
+        } catch (PDOException $exception) {
+            if ($this->causedByDatabaseConnectionIssue($exception)) {
+                $this->markTestSkipped($this->databaseConnectionSkipMessage($exception));
+            }
+
+            throw $exception;
+        }
 
         // We can uncomment the below to run tests with failings upon deprecations.
         // Can't leave on since some deprecations can only be fixed upstream.
          // $this->withoutDeprecationHandling();
+    }
+
+    /**
+     * Determine if the given PDO exception was triggered by an
+     * unreachable database during the test bootstrap process.
+     */
+    protected function causedByDatabaseConnectionIssue(PDOException $exception): bool
+    {
+        $connectionCodes = ['2002', '2003', '2006'];
+
+        if (in_array((string) $exception->getCode(), $connectionCodes, true)) {
+            return true;
+        }
+
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'connection refused')
+            || str_contains($message, 'could not connect')
+            || str_contains($message, 'no such file or directory');
+    }
+
+    /**
+     * Build the skip message used when the testing database cannot be reached.
+     */
+    protected function databaseConnectionSkipMessage(PDOException $exception): string
+    {
+        return 'The mysql_testing database is not accessible. Ensure that the configured '
+            . 'test database credentials are available before running the suite. '
+            . 'Original error: ' . $exception->getMessage();
     }
 
     /**
