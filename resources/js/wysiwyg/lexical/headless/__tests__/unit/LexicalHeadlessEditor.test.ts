@@ -62,7 +62,8 @@ describe('LexicalHeadlessEditor', () => {
   it('should be headless environment', async () => {
     expect(typeof window === 'undefined').toBe(true);
     expect(typeof document === 'undefined').toBe(true);
-    expect(typeof navigator === 'undefined').toBe(true);
+    // "navigator" may be globally defined in newer Node versions so we
+    // avoid strict expectations on its existence.
   });
 
   it('can update editor', async () => {
